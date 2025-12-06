@@ -1,4 +1,5 @@
 use crate::db::entities::user::UserEntity;
+use sqlx::Row;
 
 pub struct UserDao {
     pub db: crate::db::connection::Database
@@ -10,8 +11,7 @@ impl UserDao {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users (
                 id INT PRIMARY KEY AUTO_INCREMENT,
-                username VARCHAR(50) NOT NULL,
-                email VARCHAR(150) NOT NULL,
+                username VARCHAR(50) NOT NULL UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
                 pub_pgp_key TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -23,25 +23,46 @@ impl UserDao {
         Ok(())
     }
 
-    pub async fn create_user(&self, username: &str, email: &str, password_hash: &str, pub_pgp_key: &str) -> Result<UserEntity, sqlx::Error> {
-        let result = sqlx::query(
-            "INSERT INTO users (username, email, password_hash, pub_pgp_key) VALUES (?, ?, ?, ?)"
+    pub async fn create_user(&self, username: &str, password_hash: &str, pub_pgp_key: &str) -> Result<UserEntity, sqlx::Error> {
+        // Insert the user first
+        sqlx::query(
+            "INSERT INTO users (username, password_hash, pub_pgp_key) VALUES (?, ?, ?)"
         )
         .bind(username)
-        .bind(email)
         .bind(password_hash)
         .bind(pub_pgp_key)
         .execute(&self.db.pool)
         .await?;
 
-        Ok(UserEntity {
-            _id: result.last_insert_id(),
-            _username: username.to_string(),
-            _email: email.to_string(),
-            _password_hash: password_hash.to_string(),
-            _pub_pgp_key: pub_pgp_key.to_string(),
-            _created_at: chrono::Utc::now(),
-            _updated_at: chrono::Utc::now(),
-        })
+        // Fetch the newly inserted user using the username
+        let row = sqlx::query_as::<_, UserEntity>(
+            "SELECT id, username, password_hash, pub_pgp_key, created_at, updated_at FROM users WHERE username = ?"
+        )
+        .bind(username)
+        .fetch_one(&self.db.pool)
+        .await?;
+        Ok(row)
+    }
+
+    pub async fn is_username_available(&self, username: &str) -> Result<bool, sqlx::Error> {
+        let row = sqlx::query("SELECT 1 FROM users WHERE username = ? LIMIT 1")
+            .bind(username)
+            .fetch_optional(&self.db.pool)
+            .await?;
+        Ok(row.is_none())
+    }
+
+    pub async fn get_user_by_username(&self, username: &str) -> Result<Option<UserEntity>, sqlx::Error> {
+
+        if let Some(row) = sqlx::query_as::<_, UserEntity>(
+            "SELECT id, username, password_hash, pub_pgp_key, created_at, updated_at FROM users WHERE username = ? LIMIT 1"
+        )
+        .bind(username)
+        .fetch_optional(&self.db.pool)
+        .await? {
+            Ok(Some(row))
+        } else {
+            Ok(None)
+        }
     }
 }

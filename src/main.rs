@@ -11,10 +11,16 @@ async fn main() {
         db: get_db_connection().await
     };
     user_dao.create_user_table().await.unwrap();  // todo: handle error
-    let created_user: UserEntity = user_dao.create_user("test_user", "test@example.com", "hashed_password", "public_key").await.unwrap();
+    let created_user: UserEntity = user_dao.create_user("test_user", "hashed_password", "public_key").await.unwrap();
     println!("Created user: {:?}", created_user);
+    let mut is_available = user_dao.is_username_available("test_user").await.unwrap();
+    println!("Is 'test_user' available? {}", is_available);
+    is_available = user_dao.is_username_available("test_user2").await.unwrap();
+    println!("Is 'test_user2' available? {}", is_available);
+    let fetched_user = user_dao.get_user_by_username("test_user").await.unwrap();
+    println!("Fetched user: {:?}", fetched_user);
 }
-
+    
 async fn get_db_connection() -> Database {
     let config = config::AppConfig::new();
     let db_conn_url: String = format!(
