@@ -1,5 +1,4 @@
 use crate::db::entities::user::UserEntity;
-use sqlx::Row;
 
 pub struct UserDao {
     pub db: crate::db::connection::Database
